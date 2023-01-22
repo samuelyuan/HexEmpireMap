@@ -18,7 +18,7 @@ type Tile struct {
 	TotalCost float64
 }
 
-func (pathfinder *Pathfinder) findPath(startField *Field, endField *Field, avoidEstate []string, avoidWater bool) []*Field {
+func (pathfinder *Pathfinder) findPath(board *Board, startField *Field, endField *Field, avoidEstate []string, avoidWater bool) []*Field {
 	if startField == nil || endField == nil {
 		return nil
 	}
@@ -39,10 +39,11 @@ func (pathfinder *Pathfinder) findPath(startField *Field, endField *Field, avoid
 		currentTile := tiles[0]
 		tiles = tiles[1:]
 		for neighborNum := 0; neighborNum < 6; neighborNum++ {
-			if pathfinder.canWalk(currentTile.Field, currentTile.Field.Neighbors[neighborNum], avoidEstate, avoidWater) ||
-				currentTile.Field.Neighbors[neighborNum] == endField {
+			neighbor := board.getNeighborField(currentTile.Field, neighborNum)
+			if pathfinder.canWalk(currentTile.Field, neighbor, avoidEstate, avoidWater) ||
+				neighbor == endField {
 				newTile := &Tile{}
-				newTile.Field = currentTile.Field.Neighbors[neighborNum]
+				newTile.Field = neighbor
 				distance := pathfinder.getDistance(newTile.Field, endField)
 				newTile.Parent = currentTile
 				newTile.DistCost = moveCost[neighborNum] + distance
@@ -120,7 +121,7 @@ func (pathfinder *Pathfinder) canWalk(a *Field, b *Field, avoidEstate []string, 
 }
 
 func (pathFinder *Pathfinder) getFieldStrKey(field *Field) string {
-	return "f" + string(field.FX) + "x" + string(field.FY)
+	return getFieldKey(field.FX, field.FY)
 }
 
 func (pathFinder *Pathfinder) getDistance(a *Field, b *Field) float64 {

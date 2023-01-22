@@ -20,21 +20,23 @@ const (
 )
 
 type HexMap struct {
-	MapNumber       int
-	RandomSeed      int
-	Background      *ebiten.Image
-	BackgroundDirt  *ebiten.Image
-	BackgroundGrass *ebiten.Image
-	BackgroundSea   *ebiten.Image
-	BackgroundTiles *ebiten.Image
-	UI              *ebiten.Image
-	Board           *Board
-	Pathfinder      *Pathfinder
-	TownNames       []string
-	TextFont        font.Face
+	RandomSeed             int
+	Background             *ebiten.Image
+	BackgroundDirt         *ebiten.Image
+	BackgroundGrass        *ebiten.Image
+	BackgroundSea          *ebiten.Image
+	BackgroundTiles        *ebiten.Image
+	UI                     *ebiten.Image
+	Board                  *Board
+	Pathfinder             *Pathfinder
+	TextFont               font.Face
+	BackgroundImageOptions map[string]*LandImageOptions
+	WaterImageOptions      map[string]*WaterImageOptions
+	TownImageOptions       map[string]*LandImageOptions
 }
 
 type Board struct {
+	MapNumber       int
 	XMax            int
 	YMax            int
 	HexWidth        int
@@ -44,6 +46,7 @@ type Board struct {
 	LandGroups      [][]*Field
 	Towns           []*Field
 	PartiesCapitals []*Field
+	TownNames       []string
 }
 
 type Field struct {
@@ -54,15 +57,34 @@ type Field struct {
 	LandId    int
 	Type      string
 	Capital   int
-	Neighbors [6]*Field
+	Neighbors [6]*Point2D
 	IsLand    bool
 	Estate    string
 	TownName  string
 }
 
+type Point2D struct {
+	X int
+	Y int
+}
+
+type WaterImageOptions struct {
+	WaterBgImgIndex int
+	FlipH           int
+	FlipV           int
+	RotateDegrees   int
+}
+
+type LandImageOptions struct {
+	BgDirtImgIndex  int
+	BgGrassImgIndex int
+	FlipH           int
+	FlipV           int
+	RotateDegrees   int
+}
+
 func NewHexMap(mapNumber int, textFont font.Face) *HexMap {
 	hexMap := &HexMap{}
-	hexMap.MapNumber = mapNumber
 	hexMap.RandomSeed = mapNumber
 	hexMap.Background = ebiten.NewImage(800, 600)
 	hexMap.BackgroundDirt = ebiten.NewImage(800, 600)
@@ -71,8 +93,9 @@ func NewHexMap(mapNumber int, textFont font.Face) *HexMap {
 	hexMap.BackgroundTiles = ebiten.NewImage(800, 600)
 	hexMap.UI = ebiten.NewImage(800, 600)
 	hexMap.Board = NewBoard()
+	hexMap.Board.MapNumber = mapNumber
+	hexMap.Board.TownNames = generateAllTowns()
 	hexMap.Pathfinder = NewPathfinder()
-	hexMap.TownNames = generateAllTowns()
 	hexMap.TextFont = textFont
 	return hexMap
 }
@@ -153,7 +176,28 @@ func (hexMap *HexMap) rotateImageMatrix(options *ebiten.DrawImageOptions, img *e
 	options.GeoM.Translate(width/2, height/2)
 }
 
-func (hexMap *HexMap) generateBackground() {
+func (hexMap *HexMap) generateBackgroundImageOptions() {
+	hexMap.BackgroundImageOptions = make(map[string]*LandImageOptions)
+	for x := 0; x < 6; x++ {
+		for y := 0; y < 4; y++ {
+			bgDirtImgIndex := hexMap.rand(6)
+			bgGrassImgIndex := hexMap.rand(6)
+			flipH := hexMap.rand(2)
+			flipV := hexMap.rand(2)
+			rotateDegrees := hexMap.rand(4) * 90
+
+			hexMap.BackgroundImageOptions[getFieldKey(x, y)] = &LandImageOptions{
+				BgDirtImgIndex:  bgDirtImgIndex,
+				BgGrassImgIndex: bgGrassImgIndex,
+				FlipH:           flipH,
+				FlipV:           flipV,
+				RotateDegrees:   rotateDegrees,
+			}
+		}
+	}
+}
+
+func (hexMap *HexMap) drawMapBackground() {
 	dirtBgImg := make([]*ebiten.Image, 6)
 	grassBgImg := make([]*ebiten.Image, 6)
 
@@ -179,11 +223,12 @@ func (hexMap *HexMap) generateBackground() {
 			destY := y*125 - 15
 			options := &ebiten.DrawImageOptions{}
 
-			dirtImg := dirtBgImg[hexMap.rand(6)]
-			grassImg := grassBgImg[hexMap.rand(6)]
-			flipH := hexMap.rand(2)
-			flipV := hexMap.rand(2)
-			rotateDegrees := hexMap.rand(4) * 90
+			backgroundImageOptions := hexMap.BackgroundImageOptions[getFieldKey(x, y)]
+			dirtImg := dirtBgImg[backgroundImageOptions.BgDirtImgIndex]
+			grassImg := grassBgImg[backgroundImageOptions.BgGrassImgIndex]
+			flipH := backgroundImageOptions.FlipH
+			flipV := backgroundImageOptions.FlipV
+			rotateDegrees := backgroundImageOptions.RotateDegrees
 			hexMap.flipImageMatrix(options, grassImg, flipH, flipV)
 			hexMap.rotateImageMatrix(options, grassImg, rotateDegrees)
 
@@ -194,13 +239,23 @@ func (hexMap *HexMap) generateBackground() {
 	}
 }
 
+func getFieldKey(x int, y int) string {
+	return "f" + fmt.Sprint(x) + "x" + fmt.Sprint(y)
+}
+
 func (hexMap *HexMap) getField(x int, y int, board *Board) *Field {
-	key := "f" + string(x) + "x" + string(y)
+	key := getFieldKey(x, y)
+	return board.Fields[key]
+}
+
+func (board *Board) getNeighborField(field *Field, neighborIndex int) *Field {
+	neighborLocation := field.Neighbors[neighborIndex]
+	key := getFieldKey(neighborLocation.X, neighborLocation.Y)
 	return board.Fields[key]
 }
 
 func (hexMap *HexMap) addField(x int, y int, board *Board) {
-	key := "f" + string(x) + "x" + string(y)
+	key := getFieldKey(x, y)
 	board.Fields[key] = &Field{}
 	field := board.Fields[key]
 	field.FX = x
@@ -233,23 +288,23 @@ func (hexMap *HexMap) addField(x int, y int, board *Board) {
 }
 
 func (hexMap *HexMap) findNeighbors(field *Field, board *Board) {
-	field.Neighbors = [6]*Field{}
+	field.Neighbors = [6]*Point2D{}
 	fx := field.FX
 	fy := field.FY
 	if fx%2 == 0 {
-		field.Neighbors[0] = hexMap.getField(fx+1, fy, board)
-		field.Neighbors[1] = hexMap.getField(fx, fy+1, board)
-		field.Neighbors[2] = hexMap.getField(fx-1, fy, board)
-		field.Neighbors[3] = hexMap.getField(fx-1, fy-1, board)
-		field.Neighbors[4] = hexMap.getField(fx, fy-1, board)
-		field.Neighbors[5] = hexMap.getField(fx+1, fy-1, board)
+		field.Neighbors[0] = &Point2D{X: fx + 1, Y: fy}
+		field.Neighbors[1] = &Point2D{X: fx, Y: fy + 1}
+		field.Neighbors[2] = &Point2D{X: fx - 1, Y: fy}
+		field.Neighbors[3] = &Point2D{X: fx - 1, Y: fy - 1}
+		field.Neighbors[4] = &Point2D{X: fx, Y: fy - 1}
+		field.Neighbors[5] = &Point2D{X: fx + 1, Y: fy - 1}
 	} else {
-		field.Neighbors[0] = hexMap.getField(fx+1, fy+1, board)
-		field.Neighbors[1] = hexMap.getField(fx, fy+1, board)
-		field.Neighbors[2] = hexMap.getField(fx-1, fy+1, board)
-		field.Neighbors[3] = hexMap.getField(fx-1, fy, board)
-		field.Neighbors[4] = hexMap.getField(fx, fy-1, board)
-		field.Neighbors[5] = hexMap.getField(fx+1, fy, board)
+		field.Neighbors[0] = &Point2D{X: fx + 1, Y: fy + 1}
+		field.Neighbors[1] = &Point2D{X: fx, Y: fy + 1}
+		field.Neighbors[2] = &Point2D{X: fx - 1, Y: fy + 1}
+		field.Neighbors[3] = &Point2D{X: fx - 1, Y: fy}
+		field.Neighbors[4] = &Point2D{X: fx, Y: fy - 1}
+		field.Neighbors[5] = &Point2D{X: fx + 1, Y: fy}
 	}
 }
 
@@ -260,10 +315,11 @@ func (hexMap *HexMap) setLandFields(board *Board) {
 			if field.Type == "water" {
 				landFields := 0
 				for n := 0; n < 6; n++ {
-					if field.Neighbors[n] == nil {
+					neighbor := board.getNeighborField(field, n)
+					if neighbor == nil {
 						continue
 					}
-					if field.Neighbors[n].Type == "land" {
+					if neighbor.Type == "land" {
 						landFields++
 					}
 				}
@@ -288,10 +344,11 @@ func (hexMap *HexMap) setLandFields(board *Board) {
 			if field.Type == "water" {
 				waterFields := 0
 				for n := 0; n < 6; n++ {
-					if field.Neighbors[n] == nil {
+					neighbor := board.getNeighborField(field, n)
+					if neighbor == nil {
 						continue
 					}
-					if field.Neighbors[n].Type == "water" {
+					if neighbor.Type == "water" {
 						waterFields++
 					}
 				}
@@ -307,9 +364,10 @@ func (hexMap *HexMap) setLandFields(board *Board) {
 func (hexMap *HexMap) addNeighborsToLandGroup(field *Field, board *Board, landId int) int {
 	newFields := 0
 	for n := 0; n < 6; n++ {
-		if field.Neighbors[n] != nil && field.Neighbors[n].Type == "land" && field.Neighbors[n].LandId < 0 {
-			board.LandGroups[landId] = append(board.LandGroups[landId], field.Neighbors[n])
-			field.Neighbors[n].LandId = landId
+		neighbor := board.getNeighborField(field, n)
+		if neighbor != nil && neighbor.Type == "land" && neighbor.LandId < 0 {
+			board.LandGroups[landId] = append(board.LandGroups[landId], neighbor)
+			neighbor.LandId = landId
 			newFields++
 		}
 	}
@@ -377,10 +435,11 @@ func (hexMap *HexMap) generateTowns(board *Board) {
 					ok := true
 					for n := 0; n < 6; n++ {
 						field := board.LandGroups[landNum][townIndex]
-						if field.Neighbors[n] == nil {
+						neighbor := board.getNeighborField(field, n)
+						if neighbor == nil {
 							continue
 						}
-						if field.Neighbors[n].Type == "water" || field.Neighbors[n].Estate != "" {
+						if neighbor.Type == "water" || neighbor.Estate != "" {
 							ok = false
 						}
 					}
@@ -409,9 +468,9 @@ func (hexMap *HexMap) generatePorts(board *Board) {
 	portNum := 0
 	pathNum := 0
 	for town := 0; town < len(board.Towns)-1; town++ {
-		path := hexMap.Pathfinder.findPath(board.Towns[town], board.Towns[town+1], []string{"town"}, true)
+		path := hexMap.Pathfinder.findPath(board, board.Towns[town], board.Towns[town+1], []string{"town"}, true)
 		if path == nil || len(path) > portNum {
-			path = hexMap.Pathfinder.findPath(board.Towns[town], board.Towns[town+1], []string{"town"}, false)
+			path = hexMap.Pathfinder.findPath(board, board.Towns[town], board.Towns[town+1], []string{"town"}, false)
 			pathNum++
 		}
 		for pathIndex := 1; pathIndex < len(path)-1; pathIndex++ {
@@ -422,6 +481,29 @@ func (hexMap *HexMap) generatePorts(board *Board) {
 			if path[pathIndex].Type == "land" && path[pathIndex-1].Type == "water" {
 				path[pathIndex].Estate = "port"
 				portNum++
+			}
+		}
+	}
+}
+
+func (hexMap *HexMap) assignWaterImageOptions(board *Board) {
+	hexMap.WaterImageOptions = make(map[string]*WaterImageOptions)
+
+	for x := 0; x < board.XMax; x++ {
+		for y := 0; y < board.YMax; y++ {
+			field := hexMap.getField(x, y, board)
+			if field.Type == "water" {
+				waterBgImgIndex := hexMap.rand(6)
+				flipH := hexMap.rand(2)
+				flipV := hexMap.rand(2)
+				rotateDegrees := hexMap.rand(2) * 180
+
+				hexMap.WaterImageOptions[getFieldKey(x, y)] = &WaterImageOptions{
+					WaterBgImgIndex: waterBgImgIndex,
+					FlipH:           flipH,
+					FlipV:           flipV,
+					RotateDegrees:   rotateDegrees,
+				}
 			}
 		}
 	}
@@ -455,10 +537,12 @@ func (hexMap *HexMap) drawWaterAndPorts(board *Board) {
 			field := hexMap.getField(x, y, board)
 			if field.Type == "water" {
 				options := &ebiten.DrawImageOptions{}
-				waterImg := waterBgImg[hexMap.rand(6)]
-				flipH := hexMap.rand(2)
-				flipV := hexMap.rand(2)
-				rotateDegrees := hexMap.rand(2) * 180
+
+				waterImageOptions := hexMap.WaterImageOptions[getFieldKey(x, y)]
+				waterImg := waterBgImg[waterImageOptions.WaterBgImgIndex]
+				flipH := waterImageOptions.FlipH
+				flipV := waterImageOptions.FlipV
+				rotateDegrees := waterImageOptions.RotateDegrees
 				hexMap.flipImageMatrix(options, waterImg, flipH, flipV)
 				hexMap.rotateImageMatrix(options, waterImg, rotateDegrees)
 
@@ -470,7 +554,8 @@ func (hexMap *HexMap) drawWaterAndPorts(board *Board) {
 
 				for n := 0; n < 6; n++ {
 					field := hexMap.getField(x, y, board)
-					if field.Neighbors[n] != nil && field.Neighbors[n].Estate == "port" {
+					neighbor := board.getNeighborField(field, n)
+					if neighbor != nil && neighbor.Estate == "port" {
 						portOptions := &ebiten.DrawImageOptions{}
 						portImg := portBgImg[portImageNum[n]-1]
 						hexMap.flipImageMatrix(portOptions, portImg, portFlipH[n], portFlipV[n])
@@ -484,14 +569,37 @@ func (hexMap *HexMap) drawWaterAndPorts(board *Board) {
 	}
 }
 
-func (hexMap *HexMap) addTown(x int, y int, board *Board, townBgDirtImg []*ebiten.Image, townBgGrassImg []*ebiten.Image) {
-	options := &ebiten.DrawImageOptions{}
-
-	dirtImg := townBgDirtImg[hexMap.rand(6)]
-	grassImg := townBgGrassImg[hexMap.rand(6)]
+func (hexMap *HexMap) generateTownImageOptions() *LandImageOptions {
+	bgDirtImgIndex := hexMap.rand(6)
+	bgGrassImgIndex := hexMap.rand(6)
 	flipH := hexMap.rand(2)
 	flipV := hexMap.rand(2)
 	rotateDegrees := hexMap.rand(360)
+
+	return &LandImageOptions{
+		BgDirtImgIndex:  bgDirtImgIndex,
+		BgGrassImgIndex: bgGrassImgIndex,
+		FlipH:           flipH,
+		FlipV:           flipV,
+		RotateDegrees:   rotateDegrees,
+	}
+}
+
+func (hexMap *HexMap) addTown(
+	townImageOptions *LandImageOptions,
+	x int,
+	y int,
+	board *Board,
+	townBgDirtImg []*ebiten.Image,
+	townBgGrassImg []*ebiten.Image,
+) {
+	options := &ebiten.DrawImageOptions{}
+
+	dirtImg := townBgDirtImg[townImageOptions.BgDirtImgIndex]
+	grassImg := townBgGrassImg[townImageOptions.BgGrassImgIndex]
+	flipH := townImageOptions.FlipH
+	flipV := townImageOptions.FlipV
+	rotateDegrees := townImageOptions.RotateDegrees
 	hexMap.flipImageMatrix(options, grassImg, flipH, flipV)
 	hexMap.rotateImageMatrix(options, grassImg, rotateDegrees)
 
@@ -504,15 +612,39 @@ func (hexMap *HexMap) addTown(x int, y int, board *Board, townBgDirtImg []*ebite
 }
 
 func (hexMap *HexMap) randTown() string {
-	randIndex := hexMap.rand(len(hexMap.TownNames))
-	townName := hexMap.TownNames[randIndex]
-	hexMap.TownNames[randIndex] = hexMap.TownNames[0]
-	hexMap.TownNames[0] = townName
-	hexMap.TownNames = hexMap.TownNames[1:]
+	townNames := hexMap.Board.TownNames
+	randIndex := hexMap.rand(len(townNames))
+
+	// Swap values between index 0 and randIndex
+	townName := townNames[randIndex]
+	townNames[randIndex] = townNames[0]
+	townNames[0] = townName
+
+	// Return the town at index 0 and remove from the list
+	hexMap.Board.TownNames = townNames[1:]
 	return townName
 }
 
 func (hexMap *HexMap) assignTownNames(board *Board) {
+	hexMap.TownImageOptions = make(map[string]*LandImageOptions)
+
+	for x := 0; x < board.XMax; x++ {
+		for y := 0; y < board.YMax; y++ {
+			switch hexMap.getField(x, y, board).Estate {
+			case "town":
+				hexMap.TownImageOptions[getFieldKey(x, y)] = hexMap.generateTownImageOptions()
+				hexMap.getField(x, y, board).TownName = hexMap.randTown()
+				break
+			case "port":
+				hexMap.TownImageOptions[getFieldKey(x, y)] = hexMap.generateTownImageOptions()
+				hexMap.getField(x, y, board).TownName = hexMap.randTown()
+				break
+			}
+		}
+	}
+}
+
+func (hexMap *HexMap) drawTownBackground(board *Board) {
 	townBgDirtImg := make([]*ebiten.Image, 6)
 	townBgGrassImg := make([]*ebiten.Image, 6)
 
@@ -536,12 +668,12 @@ func (hexMap *HexMap) assignTownNames(board *Board) {
 		for y := 0; y < board.YMax; y++ {
 			switch hexMap.getField(x, y, board).Estate {
 			case "town":
-				hexMap.addTown(x, y, board, townBgDirtImg, townBgGrassImg)
-				hexMap.getField(x, y, board).TownName = hexMap.randTown()
+				townImageOptions := hexMap.TownImageOptions[getFieldKey(x, y)]
+				hexMap.addTown(townImageOptions, x, y, board, townBgDirtImg, townBgGrassImg)
 				break
 			case "port":
-				hexMap.addTown(x, y, board, townBgDirtImg, townBgGrassImg)
-				hexMap.getField(x, y, board).TownName = hexMap.randTown()
+				townImageOptions := hexMap.TownImageOptions[getFieldKey(x, y)]
+				hexMap.addTown(townImageOptions, x, y, board, townBgDirtImg, townBgGrassImg)
 				break
 			}
 		}
@@ -622,31 +754,38 @@ func (hexMap *HexMap) drawTownNames(board *Board) {
 	}
 }
 
+func (hexMap *HexMap) generateBoard(board *Board) {
+	hexMap.generateBackgroundImageOptions()
+
+	for x := 0; x < board.XMax; x++ {
+		for y := 0; y < board.YMax; y++ {
+			hexMap.addField(x, y, board)
+		}
+	}
+
+	for x := 0; x < board.XMax; x++ {
+		for y := 0; y < board.YMax; y++ {
+			field := hexMap.getField(x, y, board)
+			hexMap.findNeighbors(field, board)
+		}
+	}
+
+	hexMap.setLandFields(board)
+	hexMap.generateLandGroups(board)
+	hexMap.generatePartyCapitals(board)
+	hexMap.generateTowns(board)
+	hexMap.shuffle(board.Towns)
+	hexMap.generatePorts(board)
+	hexMap.assignWaterImageOptions(board)
+	hexMap.assignTownNames(board)
+}
+
 func (hexMap *HexMap) generateMap() {
-	hexMap.generateBackground()
+	hexMap.generateBoard(hexMap.Board)
 
-	for x := 0; x < hexMap.Board.XMax; x++ {
-		for y := 0; y < hexMap.Board.YMax; y++ {
-			hexMap.addField(x, y, hexMap.Board)
-		}
-	}
-
-	for x := 0; x < hexMap.Board.XMax; x++ {
-		for y := 0; y < hexMap.Board.YMax; y++ {
-			field := hexMap.getField(x, y, hexMap.Board)
-			hexMap.findNeighbors(field, hexMap.Board)
-		}
-	}
-
-	hexMap.setLandFields(hexMap.Board)
-	hexMap.generateLandGroups(hexMap.Board)
-	hexMap.generatePartyCapitals(hexMap.Board)
-	hexMap.generateTowns(hexMap.Board)
-	hexMap.shuffle(hexMap.Board.Towns)
-	hexMap.generatePorts(hexMap.Board)
-
+	hexMap.drawMapBackground()
 	hexMap.drawWaterAndPorts(hexMap.Board)
-	hexMap.assignTownNames(hexMap.Board)
+	hexMap.drawTownBackground(hexMap.Board)
 	hexMap.drawTowns(hexMap.Board)
 	hexMap.drawTownNames(hexMap.Board)
 
@@ -676,7 +815,7 @@ func (hexMap *HexMap) generateMap() {
 	mapNumberOptions := &ebiten.DrawImageOptions{}
 	mapNumberOptions.GeoM.Translate(150, 500)
 	hexMap.UI.DrawImage(grayButtonImage, mapNumberOptions)
-	text.Draw(hexMap.UI, fmt.Sprintf("%v", hexMap.MapNumber), hexMap.TextFont, 175, 517, color.Black)
+	text.Draw(hexMap.UI, fmt.Sprintf("%v", hexMap.Board.MapNumber), hexMap.TextFont, 175, 517, color.Black)
 
 	text.Draw(hexMap.UI, "Map Number", hexMap.TextFont, 75, 517, color.White)
 }
