@@ -250,6 +250,9 @@ func (hexMap *HexMap) getField(x int, y int, board *Board) *Field {
 
 func (board *Board) getNeighborField(field *Field, neighborIndex int) *Field {
 	neighborLocation := field.Neighbors[neighborIndex]
+	if neighborLocation == nil {
+		return nil
+	}
 	key := getFieldKey(neighborLocation.X, neighborLocation.Y)
 	return board.Fields[key]
 }
@@ -287,24 +290,35 @@ func (hexMap *HexMap) addField(x int, y int, board *Board) {
 	field.TownName = ""
 }
 
+func validateLocation(x int, y int, board *Board) *Point2D {
+	if _, ok := board.Fields[getFieldKey(x, y)]; ok {
+		return &Point2D{
+			X: x,
+			Y: y,
+		}
+	} else {
+		return nil
+	}
+}
+
 func (hexMap *HexMap) findNeighbors(field *Field, board *Board) {
 	field.Neighbors = [6]*Point2D{}
 	fx := field.FX
 	fy := field.FY
 	if fx%2 == 0 {
-		field.Neighbors[0] = &Point2D{X: fx + 1, Y: fy}
-		field.Neighbors[1] = &Point2D{X: fx, Y: fy + 1}
-		field.Neighbors[2] = &Point2D{X: fx - 1, Y: fy}
-		field.Neighbors[3] = &Point2D{X: fx - 1, Y: fy - 1}
-		field.Neighbors[4] = &Point2D{X: fx, Y: fy - 1}
-		field.Neighbors[5] = &Point2D{X: fx + 1, Y: fy - 1}
+		field.Neighbors[0] = validateLocation(fx+1, fy, board)
+		field.Neighbors[1] = validateLocation(fx, fy+1, board)
+		field.Neighbors[2] = validateLocation(fx-1, fy, board)
+		field.Neighbors[3] = validateLocation(fx-1, fy-1, board)
+		field.Neighbors[4] = validateLocation(fx, fy-1, board)
+		field.Neighbors[5] = validateLocation(fx+1, fy-1, board)
 	} else {
-		field.Neighbors[0] = &Point2D{X: fx + 1, Y: fy + 1}
-		field.Neighbors[1] = &Point2D{X: fx, Y: fy + 1}
-		field.Neighbors[2] = &Point2D{X: fx - 1, Y: fy + 1}
-		field.Neighbors[3] = &Point2D{X: fx - 1, Y: fy}
-		field.Neighbors[4] = &Point2D{X: fx, Y: fy - 1}
-		field.Neighbors[5] = &Point2D{X: fx + 1, Y: fy}
+		field.Neighbors[0] = validateLocation(fx+1, fy+1, board)
+		field.Neighbors[1] = validateLocation(fx, fy+1, board)
+		field.Neighbors[2] = validateLocation(fx-1, fy+1, board)
+		field.Neighbors[3] = validateLocation(fx-1, fy, board)
+		field.Neighbors[4] = validateLocation(fx, fy-1, board)
+		field.Neighbors[5] = validateLocation(fx+1, fy, board)
 	}
 }
 
