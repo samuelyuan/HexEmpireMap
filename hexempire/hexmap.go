@@ -13,6 +13,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/text"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 const (
@@ -696,12 +697,16 @@ func (hexMap *HexMap) drawTownBackground(board *Board) {
 
 func (hexMap *HexMap) drawHex(background *ebiten.Image, xCenter float64, yCenter float64) {
 	lineColor := color.RGBA{uint8(255), uint8(255), uint8(102), 50}
-	ebitenutil.DrawLine(background, xCenter-12.5, yCenter-20, xCenter-23, yCenter-0, lineColor)
-	ebitenutil.DrawLine(background, xCenter-23, yCenter-0, xCenter-12.5, yCenter+20, lineColor)
-	ebitenutil.DrawLine(background, xCenter-12.5, yCenter+20, xCenter+12.5, yCenter+20, lineColor)
-	ebitenutil.DrawLine(background, xCenter+12.5, yCenter+20, xCenter+23, yCenter+0, lineColor)
-	ebitenutil.DrawLine(background, xCenter+23, yCenter+0, xCenter+12.5, yCenter-20, lineColor)
-	ebitenutil.DrawLine(background, xCenter+12.5, yCenter-20, xCenter-12.5, yCenter-20, lineColor)
+	hexMap.drawLine(background, xCenter-12.5, yCenter-20, xCenter-23, yCenter-0, lineColor)
+	hexMap.drawLine(background, xCenter-23, yCenter-0, xCenter-12.5, yCenter+20, lineColor)
+	hexMap.drawLine(background, xCenter-12.5, yCenter+20, xCenter+12.5, yCenter+20, lineColor)
+	hexMap.drawLine(background, xCenter+12.5, yCenter+20, xCenter+23, yCenter+0, lineColor)
+	hexMap.drawLine(background, xCenter+23, yCenter+0, xCenter+12.5, yCenter-20, lineColor)
+	hexMap.drawLine(background, xCenter+12.5, yCenter-20, xCenter-12.5, yCenter-20, lineColor)
+}
+
+func (hexMap *HexMap) drawLine(background *ebiten.Image, x1 float64, y1 float64, x2 float64, y2 float64, lineColor color.RGBA) {
+	vector.StrokeLine(background, float32(x1), float32(y1), float32(x2), float32(y2), 0.5, lineColor, true)
 }
 
 func (hexMap *HexMap) drawTowns(board *Board) {
