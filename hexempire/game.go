@@ -23,7 +23,8 @@ type Game struct {
 
 func NewGame(textFont font.Face) *Game {
 	game := &Game{}
-	game.hexMap = NewHexMap(rand.Intn(999999), textFont)
+	hexMapId := rand.Intn(999999)
+	game.hexMap = NewHexMap(hexMapId, textFont)
 	game.hexMap.generateMap()
 	game.ScreenWidth = 800
 	game.ScreenHeight = 600
@@ -36,7 +37,8 @@ func (game *Game) Update() error {
 
 		if game.hexMap.isMouseCursorOnRandomMapButton(x, y) {
 			// Generate new random map
-			game.hexMap = NewHexMap(rand.Intn(999999), game.hexMap.TextFont)
+			hexMapId := rand.Intn(999999)
+			game.hexMap = NewHexMap(hexMapId, game.hexMap.TextFont)
 			game.hexMap.generateMap()
 		}
 	}

@@ -230,12 +230,15 @@ func (hexMap *HexMap) drawMapBackground() {
 			flipH := backgroundImageOptions.FlipH
 			flipV := backgroundImageOptions.FlipV
 			rotateDegrees := backgroundImageOptions.RotateDegrees
+			hexMap.flipImageMatrix(options, dirtImg, flipH, flipV)
+			hexMap.rotateImageMatrix(options, dirtImg, rotateDegrees)
 			hexMap.flipImageMatrix(options, grassImg, flipH, flipV)
 			hexMap.rotateImageMatrix(options, grassImg, rotateDegrees)
 
 			options.GeoM.Translate(float64(destX), float64(destY))
 			hexMap.BackgroundDirt.DrawImage(dirtImg, options)
 			hexMap.BackgroundGrass.DrawImage(grassImg, options)
+
 		}
 	}
 }
@@ -813,6 +816,7 @@ func (hexMap *HexMap) generateMap() {
 		int(float64(hexMap.Board.HexWidth)*(float64(hexMap.Board.XMax)/1.35)),
 		int(float64(hexMap.Board.HexHeight)*(float64(hexMap.Board.YMax)+0.5)))
 
+	hexMap.Background.DrawImage(hexMap.BackgroundDirt.SubImage(mapView).(*ebiten.Image), nil)
 	hexMap.Background.DrawImage(hexMap.BackgroundGrass.SubImage(mapView).(*ebiten.Image), nil)
 	hexMap.Background.DrawImage(hexMap.BackgroundSea.SubImage(mapView).(*ebiten.Image), nil)
 	hexMap.Background.DrawImage(hexMap.BackgroundTiles, nil)
