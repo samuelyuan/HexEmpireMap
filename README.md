@@ -26,6 +26,40 @@ go test -v ./...
 
 ## Algorithm
 
-When the map generators runs, it first assigns most of the tiles to be water tiles and only a small portion are assigned to be land tiles. The algorithm reduces the number of water tiles by checking each water tile and setting it to land if there is at least one out of the six neighbors that have land tiles.
+### Overview
+The map generation algorithm begins by creating a mostly water-dominated map and incrementally carves out landmasses, cities, and ports through neighbor-based transformations and pathfinding. The process mimics organic land formation and logical placement of settlements.
 
-Once the land and water tiles are fixed, the algorithm partitions the map into separate landmasses and for each landmass, a random tile is assigned to be a city if it doesn't border any water tiles or another city tile. After the cities are generated and added to a list, the list is shuffled. For each adjacent pair of cities in the list, a path is calculated avoiding water tiles and if it's impossible to generate a path between two cities without crossing water or the path is too long, another path will be generated that allows using water tiles and any tiles on that path which border the water will be assigned as ports.
+### Step-by-Step Process
+
+#### 1. Initial Tile Assignment
+- Most tiles are randomly assigned as water.
+- A small portion are randomly assigned as land, usually near the four corners for balance.
+
+#### 2. Water Reduction by Neighbor Influence
+- For each tile marked as water:
+  - If at least one of its 6 neighbors is land, convert it into land.
+- This causes land to "spread" organically from seed points.
+
+#### 3. Landmass Partitioning
+- After the land tiles are finalized, they are grouped into distinct landmasses.
+  - A landmass is a connected group of adjacent land tiles.
+  - Each landmass gets a unique ID.
+
+#### 4. City Generation
+- For each landmass:
+  - A number of cities is determined based on its size.
+  - Cities are placed only on tiles that:
+    - Don’t border any water tiles.
+    - Don’t border another city tile.
+
+#### 5. City Shuffle & Pathfinding
+- The city list is shuffled to ensure randomness in route connections.
+- For each adjacent city pair:
+  - A path is attempted avoiding water.
+  - If the path is too long or impossible:
+    - A secondary path allows water traversal.
+    - Any land tile on this water-based path that borders water is converted into a port.
+
+### Notes
+- This results in naturally shaped continents with functional city-to-city connections and coastlines.
+- The ports provide logical naval access between cities across water barriers.
