@@ -54,17 +54,24 @@ func (r *MapRenderer) drawMapBackground(hexMap *HexMap, board *Board) {
 			dirtImg := dirtBgImg[imageOptions.BgDirtImgIndex]
 			grassImg := grassBgImg[imageOptions.BgGrassImgIndex]
 
-			options := &ebiten.DrawImageOptions{}
-			flipImageMatrix(options, dirtImg, imageOptions.FlipH, imageOptions.FlipV)
-			rotateImageMatrix(options, dirtImg, imageOptions.RotateDegrees)
-			flipImageMatrix(options, grassImg, imageOptions.FlipH, imageOptions.FlipV)
-			rotateImageMatrix(options, grassImg, imageOptions.RotateDegrees)
-
 			destX := x*125 - 15
 			destY := y*125 - 15
-			options.GeoM.Translate(float64(destX), float64(destY))
-			hexMap.BackgroundDirt.DrawImage(dirtImg, options)
-			hexMap.BackgroundGrass.DrawImage(grassImg, options)
+
+			// Dirt and grass each need their own transform: sharing one
+			// DrawImageOptions and applying flip+rotate for both images in
+			// sequence compounds the two transforms instead of applying
+			// each independently (flip cancels out, rotation doubles).
+			dirtOptions := &ebiten.DrawImageOptions{}
+			flipImageMatrix(dirtOptions, dirtImg, imageOptions.FlipH, imageOptions.FlipV)
+			rotateImageMatrix(dirtOptions, dirtImg, imageOptions.RotateDegrees)
+			dirtOptions.GeoM.Translate(float64(destX), float64(destY))
+			hexMap.BackgroundDirt.DrawImage(dirtImg, dirtOptions)
+
+			grassOptions := &ebiten.DrawImageOptions{}
+			flipImageMatrix(grassOptions, grassImg, imageOptions.FlipH, imageOptions.FlipV)
+			rotateImageMatrix(grassOptions, grassImg, imageOptions.RotateDegrees)
+			grassOptions.GeoM.Translate(float64(destX), float64(destY))
+			hexMap.BackgroundGrass.DrawImage(grassImg, grassOptions)
 		}
 	}
 }
