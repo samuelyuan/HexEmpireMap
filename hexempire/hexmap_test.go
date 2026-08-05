@@ -12,7 +12,7 @@ import (
 
 func TestGeneratedBoard(t *testing.T) {
 	hexMap := NewHexMap(148660, nil)
-	hexMap.generateBoard(hexMap.Board)
+	hexMap.generateBoard()
 
 	generatedBoardJson, err := json.MarshalIndent(hexMap.Board, "", " ")
 	if err != nil {
