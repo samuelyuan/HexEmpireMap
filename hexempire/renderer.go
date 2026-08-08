@@ -41,7 +41,7 @@ func (r *MapRenderer) Render(hexMap *HexMap) {
 	r.drawTowns(hexMap, board)
 	r.drawTownNames(hexMap, board)
 	r.composeBackground(hexMap, board)
-	r.drawUI(hexMap, board)
+	r.drawUI(hexMap)
 }
 
 func (r *MapRenderer) drawMapBackground(hexMap *HexMap, board *Board) {
@@ -225,7 +225,7 @@ func (r *MapRenderer) composeBackground(hexMap *HexMap, board *Board) {
 	hexMap.Background.DrawImage(hexMap.BackgroundTiles, nil)
 }
 
-func (r *MapRenderer) drawUI(hexMap *HexMap, board *Board) {
+func (r *MapRenderer) drawUI(hexMap *HexMap) {
 	redButtonImage := loadImage(fileDir + "/red_button.png")
 	randomMapOptions := &ebiten.DrawImageOptions{}
 	randomMapOptions.GeoM.Translate(250, 500)
@@ -234,11 +234,42 @@ func (r *MapRenderer) drawUI(hexMap *HexMap, board *Board) {
 
 	grayButtonImage := loadImage(fileDir + "/gray_button.png")
 	mapNumberOptions := &ebiten.DrawImageOptions{}
-	mapNumberOptions.GeoM.Translate(150, 500)
+	mapNumberOptions.GeoM.Translate(mapNumberButtonX, mapNumberButtonY)
 	hexMap.UI.DrawImage(grayButtonImage, mapNumberOptions)
-	text.Draw(hexMap.UI, fmt.Sprintf("%v", board.MapNumber), hexMap.TextFont, 175, 517, color.Black)
 
 	text.Draw(hexMap.UI, "Map Number", hexMap.TextFont, 75, 517, color.White)
+}
+
+// mapNumberInputHighlightColor outlines the map number button while the
+// player is typing a new one, distinguishing it from the plain display
+// state without changing the (always black) text color.
+var mapNumberInputHighlightColor = color.RGBA{255, 140, 0, 255}
+
+// Position and size of the gray map number button, matching where
+// drawUI places it, so the edit-mode outline lines up with it.
+const (
+	mapNumberButtonX      = 150
+	mapNumberButtonY      = 500
+	mapNumberButtonWidth  = 98
+	mapNumberButtonHeight = 32
+)
+
+// DrawMapNumberOverlay draws the map number button's text: the live
+// input buffer, with a cursor shown at its actual edit position, while
+// the player is typing a new map number, or the current map's number
+// otherwise. It's drawn separately from the static UI layer, fresh every
+// frame, so keystrokes appear without regenerating the whole map.
+func (r *MapRenderer) DrawMapNumberOverlay(dest *ebiten.Image, hexMap *HexMap) {
+	label := fmt.Sprintf("%v", hexMap.Board.MapNumber)
+	if hexMap.numberInput.Active() {
+		digits := hexMap.numberInput.Text()
+		cursor := hexMap.numberInput.CursorIndex()
+		label = digits[:cursor] + "|" + digits[cursor:]
+		vector.StrokeRect(dest,
+			mapNumberButtonX, mapNumberButtonY, mapNumberButtonWidth, mapNumberButtonHeight,
+			3, mapNumberInputHighlightColor, true)
+	}
+	text.Draw(dest, label, hexMap.TextFont, 175, 517, color.Black)
 }
 
 func loadImage(path string) *ebiten.Image {

@@ -32,18 +32,77 @@ func NewGame(textFont font.Face) *Game {
 }
 
 func (game *Game) Update() error {
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		x, y := ebiten.CursorPosition()
+	game.handleClick()
+	game.handleMapNumberTyping()
+	return nil
+}
 
-		if game.hexMap.isMouseCursorOnRandomMapButton(x, y) {
-			// Generate new random map
-			hexMapId := rand.Intn(999999)
-			game.hexMap = NewHexMap(hexMapId, game.hexMap.TextFont)
-			game.hexMap.generateMap()
+func (game *Game) handleClick() {
+	if !inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		return
+	}
+	x, y := ebiten.CursorPosition()
+	input := &game.hexMap.numberInput
+
+	switch {
+	case game.hexMap.isMouseCursorOnRandomMapButton(x, y):
+		game.loadMap(rand.Intn(999999))
+	case input.Active():
+		// Re-clicking the button mid-edit keeps editing as-is; clicking
+		// anywhere else cancels it. Either way, don't wipe the buffer.
+		if !game.hexMap.isMouseCursorOnMapNumberButton(x, y) {
+			input.Cancel()
 		}
+	case game.hexMap.isMouseCursorOnMapNumberButton(x, y):
+		input.Begin(game.hexMap.Board.MapNumber)
+	}
+}
+
+// handleMapNumberTyping reads keyboard input while the map number button
+// is being edited: typed digits insert at the cursor, backspace/delete
+// remove around it, arrow/home/end move it, escape cancels, and
+// enter/numpad-enter loads the typed map number.
+func (game *Game) handleMapNumberTyping() {
+	input := &game.hexMap.numberInput
+	if !input.Active() {
+		return
 	}
 
-	return nil
+	for _, r := range ebiten.AppendInputChars(nil) {
+		input.InsertDigit(r)
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyBackspace) {
+		input.DeleteBefore()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyDelete) {
+		input.DeleteAfter()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyLeft) {
+		input.MoveLeft()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyRight) {
+		input.MoveRight()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyHome) {
+		input.MoveToStart()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyEnd) {
+		input.MoveToEnd()
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		input.Cancel()
+		return
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyEnter) || inpututil.IsKeyJustPressed(ebiten.KeyKPEnter) {
+		if mapNumber, ok := input.Confirm(); ok {
+			game.loadMap(mapNumber)
+		}
+	}
+}
+
+func (game *Game) loadMap(mapNumber int) {
+	game.hexMap = NewHexMap(mapNumber, game.hexMap.TextFont)
+	game.hexMap.generateMap()
 }
 
 func (game *Game) Draw(screen *ebiten.Image) {

@@ -23,6 +23,8 @@ type HexMap struct {
 	backgroundImageOptions map[string]*LandImageOptions
 	waterImageOptions      map[string]*WaterImageOptions
 	townImageOptions       map[string]*LandImageOptions
+
+	numberInput MapNumberInput
 }
 
 func NewHexMap(mapNumber int, textFont font.Face) *HexMap {
@@ -55,9 +57,19 @@ func (hexMap *HexMap) isMouseCursorOnRandomMapButton(x int, y int) bool {
 	return x >= 255 && x <= 345 && y >= 500 && y <= 530
 }
 
+// isMouseCursorOnMapNumberButton reports whether (x, y) is over the map
+// number button, which can be clicked to type in a specific map number.
+func (hexMap *HexMap) isMouseCursorOnMapNumberButton(x int, y int) bool {
+	return x >= 155 && x <= 240 && y >= 500 && y <= 530
+}
+
 func (hexMap *HexMap) drawBackground(screen *ebiten.Image) {
 	options := &ebiten.DrawImageOptions{}
 	options.GeoM.Translate(25, 25)
 	screen.DrawImage(hexMap.Background, options)
 	screen.DrawImage(hexMap.UI, nil)
+
+	// Drawn fresh every frame (instead of baked into the static UI image)
+	// so typed digits show up immediately without regenerating the map.
+	NewMapRenderer().DrawMapNumberOverlay(screen, hexMap)
 }
